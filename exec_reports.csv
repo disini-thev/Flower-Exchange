@@ -1,0 +1,7 @@
+Order ID,Client Order ID,Instrument,Side,Exec Status,Quantity,Price,Reason,Time
+ord1,aa13,,1,Reject,100,55,Invalid instrument. ,20231215-024742.734
+ord2,aa14,Rose,3,Reject,100,65,Invalid side. ,20231215-024742.734
+ord3,aa15,Lavender,2,Reject,101,1,Invalid size. ,20231215-024742.734
+ord4,aa16,Tulip,1,Reject,100,-1,Invalid price. ,20231215-024742.734
+ord5,aa17,Orchid,1,Reject,1000,-1,Invalid price. ,20231215-024742.734
+ord6,,Rose,-1,Reject,10,54,Invalid Client Order ID. Invalid side. ,20231215-024742.734

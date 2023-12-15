@@ -1,0 +1,16 @@
+need a data structure to hold the orders that are not completed yet
+
+highest buyers and the lowest sellers are matched and the price is set at the price of the last transaction
+
+if there are no entries on the opposite side, new exec report
+if a selling order is higher than the highest buying order, new exec report
+if a buying order is lower than the lowest selling order, new exec report
+
+if the order executes fully or partially, new entries must not be entered
+if the order executes fully, the order is removed from the book (remove the order from the data structure)
+if the order executes partially, the remaining quantity is left on the book (update the quantity of the order)
+
+the price is set as the price of the order in the book that was entered first(data structure)
+data structure should sort the orders by price and time
+buying orders should be sorted in descending order and first come first serve for same price
+selling orders should be sorted in ascending order and first come first serve for same price
