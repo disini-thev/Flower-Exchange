@@ -7,6 +7,7 @@
 #include <ctime>
 #include <iomanip>
 #include <queue>
+#include <unordered_map>
 
 using namespace std;
 
@@ -30,7 +31,6 @@ public:
         this->price = price;
     }
 };
-
 int Order::counter=0;
 
 class Exec_report {
@@ -55,6 +55,39 @@ public:
         this->price = price;
         this->Reason = Reason;
         this->Time = Time;
+    }
+};
+
+// Comparator for max heap (buying orders)
+struct MaxHeapComparator {
+    bool operator()(const Order* a, const Order* b) const {
+        if (a->price == b->price) {
+            return a->Order_ID > b->Order_ID; // Prioritize by arrival order
+        }
+        return a->price < b->price;
+    }
+};
+
+// Comparator for min heap (selling orders)
+struct MinHeapComparator {
+    bool operator()(const Order* a, const Order* b) const {
+        if (a->price == b->price) {
+            return a->Order_ID > b->Order_ID; // Prioritize by arrival order
+        }
+        return a->price > b->price;
+    }
+};
+
+class OrderBook {
+public:
+    string name;
+    priority_queue<Order*, vector<Order*>, MaxHeapComparator> buyHeap;
+    priority_queue<Order*, vector<Order*>, MinHeapComparator> sellHeap;
+
+    OrderBook(string name) {
+        this->name = name;
+        this->buyHeap = priority_queue<Order*, vector<Order*>, MaxHeapComparator>();
+        this->sellHeap = priority_queue<Order*, vector<Order*>, MinHeapComparator>();
     }
 };
 
@@ -94,6 +127,7 @@ vector<Order> readCSVFile(string filename) {
     return orders;
 }
 
+// Function to write the data to a CSV file
 void writeToCSVFile(string filename, const vector<string>& attributes, const vector<Exec_report>& data) {
     ofstream file(filename, ios::out); // Open the file in write mode
     if (!file.is_open()) {
@@ -118,6 +152,9 @@ void writeToCSVFile(string filename, const vector<string>& attributes, const vec
     file.close();
 }
 
+// Helper Functions
+
+// Function to get the current timestamp in the format YYYYMMDD-HHMMSS.mmm
 string getCurrentTimestamp() {
     // Get the current time point
     auto now = chrono::system_clock::now();
@@ -138,28 +175,6 @@ string getCurrentTimestamp() {
 
     return oss.str();
 }
-
-
-
-// Comparator for max heap (buying orders)
-struct MaxHeapComparator {
-    bool operator()(const Order* a, const Order* b) const {
-        if (a->price == b->price) {
-            return a->Order_ID > b->Order_ID; // Prioritize by arrival order
-        }
-        return a->price < b->price;
-    }
-};
-
-// Comparator for min heap (selling orders)
-struct MinHeapComparator {
-    bool operator()(const Order* a, const Order* b) const {
-        if (a->price == b->price) {
-            return a->Order_ID > b->Order_ID; // Prioritize by arrival order
-        }
-        return a->price > b->price;
-    }
-};
 
 // data validation
 string validateData(Order order){
@@ -183,39 +198,54 @@ string validateData(Order order){
     return ret;
 }
 
-void handleOrders (vector<Order> &orders){
-    priority_queue<Order*, vector<Order*>, MaxHeapComparator> buyHeap; // Max heap for buying orders
-    priority_queue<Order*, vector<Order*>, MinHeapComparator> sellHeap; // Min heap for selling orders
+// initialization of orderbooks
+unordered_map<string, OrderBook*> initializeOrderBooks() {
+    unordered_map<string, OrderBook*> books;
+    vector<string> instruments = {"Rose", "Lavender", "Lotus", "Tulip", "Orchid"};
+    for (const auto& instrument : instruments) {
+        books[instrument] = new OrderBook(instrument);
+    }
+    return books;
+}
 
+// Exchange Function
+void handleOrders (vector<Order> &orders){
+    // cout << "Handling orders..." << endl;
+    // dictionary of orderbooks for different types of instruments
+    unordered_map<string, OrderBook*> orderBooks = initializeOrderBooks();
+    // a vector of exec reports
     vector<Exec_report> data;
 
-    // Separate orders into buy and sell heaps
     for (int i=0; i<orders.size(); i++) {
-        bool partially_filled = false;
+        bool partially_filled = false; // used to check if the order needs to be enterred to the orderbook as a new entry
         // data validation
         string ret = validateData(orders[i]);
-        cout << ret << endl;
+        // cout << ret << endl;
+        
+        // Invalid entries enterred as Reject Exec Reports
         if (ret !=""){
             data.emplace_back(orders[i].Order_ID, orders[i].Client_ID, orders[i].Instrument, orders[i].side, "Reject", orders[i].quantity, orders[i].price,ret, getCurrentTimestamp());
             continue;
         }
-
+        
+        // current instrument
+        string instrument = orders[i].Instrument;
         if (orders[i].side == 1) {
             while (true){
                 // new entries 
                 // a new order to the order heap and a nex exec report is added
-                if (sellHeap.empty() || sellHeap.top()->price > orders[i].price){
-                    buyHeap.push(&orders[i]);
+                if (orderBooks[instrument]->sellHeap.empty() || orderBooks[instrument]->sellHeap.top()->price > orders[i].price){
+                    orderBooks[instrument]->buyHeap.push(&orders[i]);
                     if (!partially_filled){
                         data.emplace_back(orders[i].Order_ID, orders[i].Client_ID, orders[i].Instrument, orders[i].side, "New", orders[i].quantity, orders[i].price,"", getCurrentTimestamp());
                     }
                     break;
                 }
                 // executable orders
-                else if (sellHeap.top()->price<=orders[i].price){
+                else if (orderBooks[instrument]->sellHeap.top()->price <= orders[i].price){
                     // current top order needs to be popped, two reports needed to be added
-                    Order * popped = sellHeap.top();
-                    sellHeap.pop();
+                    Order * popped = orderBooks[instrument]->sellHeap.top();
+                    orderBooks[instrument]->sellHeap.pop();
                     if (popped->quantity == orders[i].quantity){
                         data.emplace_back(orders[i].Order_ID, orders[i].Client_ID, orders[i].Instrument, orders[i].side, "Fill", orders[i].quantity, popped->price,"", getCurrentTimestamp());
                         data.emplace_back(popped->Order_ID, popped->Client_ID, popped->Instrument, popped->side, "Fill", popped->quantity, popped->price,"", getCurrentTimestamp());
@@ -225,7 +255,7 @@ void handleOrders (vector<Order> &orders){
                         data.emplace_back(orders[i].Order_ID, orders[i].Client_ID, orders[i].Instrument, orders[i].side, "Fill", orders[i].quantity, popped->price,"", getCurrentTimestamp());
                         data.emplace_back(popped->Order_ID, popped->Client_ID, popped->Instrument, popped->side, "PFill", orders[i].quantity, popped->price,"", getCurrentTimestamp());
                         popped->quantity -= orders[i].quantity;
-                        sellHeap.push(&orders[i]);
+                        orderBooks[instrument]->sellHeap.push(&orders[i]);
                         break;
                     }
                     else{
@@ -233,7 +263,7 @@ void handleOrders (vector<Order> &orders){
                         data.emplace_back(orders[i].Order_ID, orders[i].Client_ID, orders[i].Instrument, orders[i].side, "PFill", popped->quantity, popped->price,"", getCurrentTimestamp());
                         data.emplace_back(popped->Order_ID, popped->Client_ID, popped->Instrument, popped->side, "Fill", popped->quantity, popped->price,"", getCurrentTimestamp());
                         orders[i].quantity -= popped->quantity;
-                        buyHeap.push(&orders[i]);
+                        orderBooks[instrument]->buyHeap.push(&orders[i]);
                     }
                 }
             }
@@ -241,18 +271,18 @@ void handleOrders (vector<Order> &orders){
             while(true){
                 // new entries
                 // a new order to the order heap and a nex exec report is added
-                if (buyHeap.empty() || buyHeap.top()->price < orders[i].price){
-                    sellHeap.push(&orders[i]);
+                if (orderBooks[instrument]->buyHeap.empty() || orderBooks[instrument]->buyHeap.top()->price < orders[i].price){
+                    orderBooks[instrument]->sellHeap.push(&orders[i]);
                     if (!partially_filled){
                         data.emplace_back(orders[i].Order_ID, orders[i].Client_ID, orders[i].Instrument, orders[i].side, "New", orders[i].quantity, orders[i].price,"", getCurrentTimestamp());
                     }
                     break;
                 }
                 // executable orders
-                else if (buyHeap.top()->price>=orders[i].price){
+                else if (orderBooks[instrument]->buyHeap.top()->price>=orders[i].price){
                     // current top order needs to be popped, two reports needed to be added
-                    Order * popped = buyHeap.top();
-                    buyHeap.pop();
+                    Order * popped = orderBooks[instrument]->buyHeap.top();
+                    orderBooks[instrument]->buyHeap.pop();
                     if (popped->quantity == orders[i].quantity){
                         data.emplace_back(orders[i].Order_ID, orders[i].Client_ID, orders[i].Instrument, orders[i].side, "Fill", orders[i].quantity, popped->price,"", getCurrentTimestamp());
                         data.emplace_back(popped->Order_ID, popped->Client_ID, popped->Instrument, popped->side, "Fill", popped->quantity, popped->price,"", getCurrentTimestamp());
@@ -262,7 +292,7 @@ void handleOrders (vector<Order> &orders){
                         data.emplace_back(orders[i].Order_ID, orders[i].Client_ID, orders[i].Instrument, orders[i].side, "Fill", orders[i].quantity, popped->price,"", getCurrentTimestamp());
                         data.emplace_back(popped->Order_ID, popped->Client_ID, popped->Instrument, popped->side, "PFill", orders[i].quantity, popped->price,"", getCurrentTimestamp());
                         popped->quantity -= orders[i].quantity;
-                        buyHeap.push(&orders[i]);
+                        orderBooks[instrument]->buyHeap.push(&orders[i]);
                         break;
                     }
                     else{
@@ -270,7 +300,7 @@ void handleOrders (vector<Order> &orders){
                         data.emplace_back(orders[i].Order_ID, orders[i].Client_ID, orders[i].Instrument, orders[i].side, "PFill", popped->quantity, popped->price,"", getCurrentTimestamp());
                         data.emplace_back(popped->Order_ID, popped->Client_ID, popped->Instrument, popped->side, "Fill", popped->quantity, popped->price,"", getCurrentTimestamp());
                         orders[i].quantity -= popped->quantity;
-                        sellHeap.push(&orders[i]);
+                        orderBooks[instrument]->sellHeap.push(&orders[i]);
                     }
                 }
             }
@@ -279,6 +309,16 @@ void handleOrders (vector<Order> &orders){
     vector<string> attributes = {"Order ID", "Client Order ID", "Instrument", "Side", "Exec Status", "Quantity", "Price","Reason", "Time"};
     writeToCSVFile("exec_reports.csv", attributes, data);
 
+    /*
+    // Print the number of entries in each orderbook
+    for (const auto& pair : orderBooks) {
+        const string& instrument = pair.first;
+        const OrderBook* orderBook = pair.second;
+        cout << "OrderBook: " << instrument << endl;
+        cout << "BuyHeap entries: " << orderBook->buyHeap.size() << endl;
+        cout << "SellHeap entries: " << orderBook->sellHeap.size() << endl;
+    }
+    */
     return;
 }
 
