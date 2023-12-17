@@ -209,12 +209,11 @@ unordered_map<string, OrderBook*> initializeOrderBooks() {
 }
 
 // Exchange Function
-void handleOrders (vector<Order> &orders){
+void handleOrders (vector<Order> &orders, vector<Exec_report> &data){
     // cout << "Handling orders..." << endl;
     // dictionary of orderbooks for different types of instruments
     unordered_map<string, OrderBook*> orderBooks = initializeOrderBooks();
     // a vector of exec reports
-    vector<Exec_report> data;
 
     for (int i=0; i<orders.size(); i++) {
         bool partially_filled = false; // used to check if the order needs to be enterred to the orderbook as a new entry
@@ -306,8 +305,7 @@ void handleOrders (vector<Order> &orders){
             }
         }
     }
-    vector<string> attributes = {"Order ID", "Client Order ID", "Instrument", "Side", "Exec Status", "Quantity", "Price","Reason", "Time"};
-    writeToCSVFile("exec_reports.csv", attributes, data);
+    
 
     /*
     // Print the number of entries in each orderbook
@@ -325,6 +323,9 @@ void handleOrders (vector<Order> &orders){
 
 int main() {
     vector<Order> orders = readCSVFile("orders.csv");
-    handleOrders(orders);
+    vector<Exec_report> exec_reports;
+    handleOrders(orders,exec_reports);
+    vector<string> attributes = {"Order ID", "Client Order ID", "Instrument", "Side", "Exec Status", "Quantity", "Price","Reason", "Time"};
+    writeToCSVFile("exec_reports.csv", attributes, exec_reports);
     return 0;
 }
