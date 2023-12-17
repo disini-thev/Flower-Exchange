@@ -164,6 +164,9 @@ string getCurrentTimestamp() {
 
     // Convert time_t to a struct tm in UTC
     tm* tm_utc = gmtime(&time);
+    // for Sri Lankan Time
+    tm_utc->tm_hour+=5;
+    tm_utc->tm_min+=30;
 
     // Create a time string with the desired format
     ostringstream oss;
